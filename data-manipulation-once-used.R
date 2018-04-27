@@ -24,3 +24,13 @@ shop[, ':='(City = str_split(shop$shop_name_translated, " ", 3, simplify = TRUE)
             Name = str_split(shop$shop_name_translated, " ", 3, simplify = TRUE)[, 3])]
 shop[, shop_name_translated := NULL]
 fwrite(shop, "data/shops-translated.csv")
+
+# Currency data is collected from investing.com for the time period from 2013-01-01 to 2015-11-30.
+
+usdrub = fread("data/usd-rub.csv")[, .(date = as.Date(Date, format = "%d.%m.%Y"), cur_rate = USD_RUB )]
+dates  = data.table(date = seq(as.Date("2013-01-01"), as.Date("2015-11-30"), 1))
+usdrub = merge(dates,
+               usdrub,
+               all.x = TRUE, by = "date")
+usdrub[, cur_rate := zoo::na.locf(cur_rate)]
+fwrite(usdrub, "data/usd-rub.csv")
