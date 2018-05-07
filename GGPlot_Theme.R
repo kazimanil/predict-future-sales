@@ -16,8 +16,9 @@ theme_dt <- function(){
     legend.box.background = element_rect(fill = "darkslategray"),
     legend.text           = element_text(colour = "darkseagreen1", size = 11, family = "Ubuntu"),
     legend.title          = element_text(colour = "darkseagreen1", size = 12, family = "Arial", margin = margin(0, 0.1, 0, 0, "cm")),
-    legend.position       = "bottom",
-    legend.text.align     = 0,
+    legend.position       = "right",
+    legend.text.align     = 0.01,
+    legend.title.align    = 0.5,
     
     panel.background = element_rect(fill = "darkslategray"), 
     panel.border     = element_rect(fill = NA, colour = NA), 
