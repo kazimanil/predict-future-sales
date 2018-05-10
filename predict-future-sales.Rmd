@@ -29,7 +29,6 @@ knitr::opts_chunk$set(
 The aim is to predict sales for November 2015. Either train data will be aggregated to months / weeks  or the predictions will be based on daily data (and then aggregated for the month of course).
 
 ```{r Library Input}
-# Libraries ----
 rm(list = ls()); gc(); closeAllConnections();
 source("C:/Users/kazimanil/Documents/Digitallency_GGPlot_Theme.R")
 ```
@@ -56,12 +55,24 @@ train_monthly = train[, .(saleQ = sum(sale), saleR = sum(sale * item_price))
                       , .(year = year(date), month = month(date), shop_id, item_id)]
 train_monthly = train_monthly[saleQ > 0]
 train_monthly = train_monthly[order(item_id, shop_id, year, month)]
-ggplot(data = train_monthly, aes(x = saleQ)) + 
-  theme_dt()
+train_monthly[, saleP := saleR / saleQ] # Sale price is Revenue divided by Quantity.
 ```
 
-# I sus
+```{r Histogram of Sales, fig.cap = "Sale Quantities of Products by Month and Shop"}
+ggplot(data = train_monthly, aes(x = saleQ)) + 
+  geom_histogram(binwidth = 1, col = "orange") +
+  theme_dt() + labs(x = "Sale Quantity", y = "Frequency")
+```
 
+There is a huge amount of observations in minor values. Thus, let's have a closer look. I will limit the monthly sales by 20 now:
+
+```{r Histogram of Sales - Filtered, fig.cap = "Sale Quantities of Products by Month and Shop - Filtered"}
+ggplot(data = train_monthly[saleQ < 20], aes(x = saleQ)) + 
+  geom_histogram(binwidth = 1, col = "orange") +
+  theme_dt() + labs(x = "Sale Quantity", y = "Frequency")
+```
+
+Second histogram hints out a o possible *Poisson distribution* of sales among shops and products. So better be careful while using a linear regression! For now, let's forget about the estimation progress but rather focus on building on our **Exploratory Data Analysis**. I will now, aggregate the on Shop-Month level and merge the dataset with my shop specifications dataset derived from shop names. Then will have some plots as seen below:
 
 ```{r Aggregation by Shop}
 train_shop = train_monthly[, .(Revenue = sum(saleR)), .(shop_id, year, month)]
@@ -73,20 +84,57 @@ train_shop[City %in% c("Web", "OutboundTrade"), LocType := "Web"]
 train_shop[is.na(LocType), LocType := "Other"]
 ```
 
-# Shop Type Graph
+```{r Shop Type Graph, fig.cap = "Monthly Average Revenue by Shop Types"}
 data = train_shop[, .(RevSum = sum(Revenue), ShopAmount = .N, AvgRev = sum(Revenue) / .N), .(Type, year, month)]
 data[, Date := as.Date(paste0(year, "-", month, "-01"))]
-ggplot(data, aes(x = Date, y = AvgRev, col = Type)) +
-  theme_dt() + labs(x = "Date", y = "Average Revenue") +
+ggplot(data, aes(x = Date, y = AvgRev / 1000000, col = Type)) +
+  theme_dt() + labs(x = "Date", y = "Average Revenue (in Million Rubles)", title = "Monthly Average Revenue by Shop Types") +
+  # geom_smooth(se = FALSE, size = 2) + 
+  geom_line(size = 1) + 
+  scale_x_date(date_breaks = "3 months",  date_labels = "%b %y") +
+  theme(legend.position = "right", legend.title = element_text("Shop Types"))
+```
+
+A smoothed-out graph (using LOESS) is more comprehensible:
+
+```{r Shop Type Graph Smoothed-Out, fig.cap = "Monthly Average Revenue by Shop Types - Smoothed Out"}
+data = train_shop[, .(RevSum = sum(Revenue), ShopAmount = .N, AvgRev = sum(Revenue) / .N), .(Type, year, month)]
+data[, Date := as.Date(paste0(year, "-", month, "-01"))]
+ggplot(data, aes(x = Date, y = AvgRev / 1000000, col = Type)) +
+  theme_dt() + labs(x = "Date", y = "Average Revenue (in Million Rubles)", title = "Monthly Average Revenue by Shop Types - Smoothed Out") +
   geom_smooth(se = FALSE, size = 2) + #geom_line(size = 1) + 
   scale_x_date(date_breaks = "3 months",  date_labels = "%b %y") +
   theme(legend.position = "right", legend.title = element_text("Shop Types"))
+```
 
-# Shop Location Graph
+In next graph overall trend over time (assuming y ~ x is linear) is graphed used dashed lines.
+
+```{r Shop Location Graph, fig.cap = "Monthly Average Revenue by Shop Location"}
 data = train_shop[, .(RevSum = sum(Revenue), ShopAmount = .N, AvgRev = sum(Revenue) / .N), .(LocType, year, month)]
 data[, Date := as.Date(paste0(year, "-", month, "-01"))]
-ggplot(data, aes(x = Date, y = AvgRev, col = LocType)) +
-  theme_dt() + labs(x = "Date", y = "Average Revenue") +
-  geom_smooth(se = FALSE, size = 2) + #geom_line(size = 1) + 
+ggplot(data, aes(x = Date, y = AvgRev / 1000000, col = LocType)) +
+  theme_dt() + labs(x = "Date", y = "Average Revenue (in Million Rubles)", title = "Monthly Average Revenue by Shop Location") +
+  geom_smooth(se = FALSE, size = 1, method = "lm", formula = y ~ x, linetype = "dashed") + 
+  geom_line(size = 1.4) + 
   scale_x_date(date_breaks = "3 months",  date_labels = "%b %y") +
   theme(legend.position = "right", legend.title = element_text("Location Groups"))
+```
+
+```{r Total Revenue Graph, fig.cap = "Monthly Revenue"}
+data = train_shop[, .(RevSum = sum(Revenue), ShopAmount = .N, AvgRev = sum(Revenue) / .N), .(year, month)]
+data[, Date := as.Date(paste0(year, "-", month, "-01"))]
+ggplot(data, aes(x = Date, y = RevSum / 1000000)) +
+  theme_dt() + labs(x = "Date", y = "Total Revenue (in Million Rubles)", title = "Monthly Revenue") +
+  #geom_smooth(se = FALSE, size = 2) + 
+  geom_line(size = 1, col = "orange") + 
+  scale_x_date(date_breaks = "3 months",  date_labels = "%b %y")
+```
+
+Those graphs hint out many things:
+
+- Within December sales go high up. Most probably due to *Christmas*. A dummy variable may be of need. (Month variable can be used as a factor in R as well.)
+- There are many outlying months which has to taken care off very carefully, *i.e. Christmas or Sep 2015 for Web sales*.
+- Besides Web sales and *Other* sales, in other words *physical shops in various locations*, have similar trends over time.
+- There is an increasing demand for Web-sales and a slightly decreasing demand for non-web related demand over time.
+- Outbound Trade & Moscow Sale (Discount?) starts at late 2013 and has a downfall trend. Maybe these sales are replaced with Web sales over time.
+- Shops in Moscow have more demand then shops in other locations.
