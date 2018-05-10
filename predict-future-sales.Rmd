@@ -1,11 +1,40 @@
+---
+title: "Predict Future Sales"
+author: "Kazım Anıl Eren"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    css: my_rmarkdown_theme.css
+    fig_caption: yes
+    number_sections: yes
+    self_contained: no
+    toc: no
+---
+
+```{r setup, include = FALSE, echo = FALSE, warning = FALSE, error = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE,
+  results = 'asis',
+  fig.align = 'center',
+  fig.width = 10, 
+  fig.height = 7
+)
+```
+
+## Data Input ----
+The aim is to predict sales for November 2015. Either train data will be aggregated to months / weeks  or the predictions will be based on daily data (and then aggregated for the month of course).
+
+```{r Library Input}
 # Libraries ----
 rm(list = ls()); gc(); closeAllConnections();
 source("C:/Users/kazimanil/Documents/Digitallency_GGPlot_Theme.R")
+```
 
-# Data Input ----
-# The aim is to predict sales for November 2015. Either train data will be aggregated to months / weeks 
-# or the predictions will be based on daily data (and then aggregated for the month of course).
-
+```{r Initial Data Input}
 train = fread("data/sales_train_v2.csv")[, .(date = as.Date(date, format = "%d.%m.%Y"), shop_id, item_id, item_price, sale = item_cnt_day)]
 test  = fread("data/test.csv")
 nov   = data.table(date = seq(as.Date("2015-11-01"), as.Date("2015-11-30"), 1))
@@ -14,19 +43,27 @@ shop  = fread("data/shops-translated.csv", encoding = "UTF-8")
 item  = fread("data/item_category.csv", encoding = "UTF-8")
 curr  = fread("data/usd-rub.csv")
 cal   = fread("data/calendar.csv")
-
-# Manipulations ----
 dates = merge(cal,
               curr, 
               by = "date")
 rm(cal, curr)
+```
 
-# Estimations should be on a montly basis. I will focus on the months which have more than 0 sales.
+Test set is on a monthly basis. So my estimations should be based on monthly sales as well. I will focus on the months which have more than 0 sales.
+
+```{r Aggregation by Shop-Month}
 train_monthly = train[, .(saleQ = sum(sale), saleR = sum(sale * item_price))
                       , .(year = year(date), month = month(date), shop_id, item_id)]
 train_monthly = train_monthly[saleQ > 0]
 train_monthly = train_monthly[order(item_id, shop_id, year, month)]
+ggplot(data = train_monthly, aes(x = saleQ)) + 
+  theme_dt()
+```
 
+# I sus
+
+
+```{r Aggregation by Shop}
 train_shop = train_monthly[, .(Revenue = sum(saleR)), .(shop_id, year, month)]
 train_shop = train_shop[order(shop_id, year, month)]
 train_shop[, Date := as.Date(paste0(year, "-", month, "-01"))]
@@ -34,8 +71,7 @@ train_shop = merge(train_shop, shop, by = "shop_id")
 train_shop[City == "Moscow", LocType := "Moscow"]
 train_shop[City %in% c("Web", "OutboundTrade"), LocType := "Web"]
 train_shop[is.na(LocType), LocType := "Other"]
-
-# I sus
+```
 
 # Shop Type Graph
 data = train_shop[, .(RevSum = sum(Revenue), ShopAmount = .N, AvgRev = sum(Revenue) / .N), .(Type, year, month)]
